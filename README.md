@@ -8,3 +8,7 @@ Currently a message has two dictionary elements with keys 0 and 1:
 
 The time of day in minutes is shown at top of the watch face and is updated every minute.
 The text received follows below the time of day.
+
+Buttons on Pebble:
+* Select single click: Gets geo-location.
+* Up single click: Shows Pebble app varsion.
