@@ -2,10 +2,11 @@
 #include "license.h"
 // Template for starting a new Pebble C Project
 #include <pebble.h>
+static const char* pVersion = "v1.1.004 07/24/2015";  
 static Window *s_main_window;
 static TextLayer *s_status_layer; // Text msgs on watch face.
 static TextLayer *s_time_layer; // Current time on watch face.
-
+static TextLayer *s_upd_time_layer; // Update time on watch face.
 
 // Returns am or pm of a tick_time.
 static const char* AmOrPm(struct tm* tick_time) {
@@ -29,6 +30,69 @@ static void tick_handler_minute(struct tm* tick_time, TimeUnits units_changed) {
   
   text_layer_set_text(s_time_layer, s_status_buffer);
 };
+
+// Sends text to phone.
+void send_text(const char *text){
+	DictionaryIterator *iter;
+	app_message_outbox_begin(&iter);
+  dict_write_cstring(iter, 0, "text");
+	dict_write_cstring(iter, 1, text);
+  dict_write_end(iter);
+  app_message_outbox_send();
+}
+
+// Sends a click message to phone.
+// nButtonId is button id. Use constants BUTTON_ID_SELECT, etc.
+// nClickType: 1 for single click, 2 for double click, 3 for long click.
+void send_click(uint8_t nButtonId, uint8_t nClickType){
+	DictionaryIterator *iter;
+	
+	app_message_outbox_begin(&iter);
+	dict_write_cstring(iter, 0, "click");
+  
+  dict_write_uint8(iter, 1, nButtonId);
+  dict_write_uint8(iter, 2, nClickType);
+	
+	dict_write_end(iter);
+  app_message_outbox_send();
+}
+
+// Up button single click.
+void up_single_click_handler(ClickRecognizerRef recognizer, void* context) {
+  text_layer_set_text(s_status_layer, pVersion);
+  // send_text("Text msg from Pebble."); // send_text() just to test, not needed.
+}
+
+
+// Select button single click. Send click message to phone.
+void select_single_click_handler(ClickRecognizerRef recognizer, void *context) {
+  // ... called on single click ...
+  // Window *window = (Window *)context;
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Select button clicked");
+  
+  text_layer_set_text(s_status_layer, "Getting geolocation...");
+  send_click(BUTTON_ID_SELECT, 1); 
+}
+
+
+// Configuration for button clicks.
+// See Pebble C documentation: User Interface, Clicks.
+void config_provider(Window *window) {
+  window_single_click_subscribe(BUTTON_ID_SELECT, select_single_click_handler);
+  window_single_click_subscribe(BUTTON_ID_UP, up_single_click_handler);
+  
+
+  // Other config examples not used now.
+  // Repeating single click:
+  // window_single_repeating_click_subscribe(BUTTON_ID_SELECT, 1000, select_single_click_handler);
+
+  // multi click config:
+  // window_multi_click_subscribe(BUTTON_ID_SELECT, 2, 10, 0, true, select_multi_click_handler);
+
+  // long click config:
+  // window_long_click_subscribe(BUTTON_ID_SELECT, 700, select_long_click_handler, select_long_click_release_handler);
+}
+
 
 
 
@@ -91,8 +155,18 @@ static void in_received_handler(DictionaryIterator *received, void *context) {
 		if(tuple) {
 			APP_LOG(APP_LOG_LEVEL_DEBUG, "received text: %s", tuple->value->cstring);
       APP_LOG(APP_LOG_LEVEL_DEBUG, "received key, %u", (unsigned int)tuple->key);
-      if (key == 0)
+      if (key == 0) {
 			  text_layer_set_text(s_status_layer, tuple->value->cstring);
+        // Set update time.
+        time_t now = time(NULL);
+        struct tm* ptmNow = localtime(&now);
+        static char s_time_buffer[] = "upd 00:00:00x ";
+        strftime(s_time_buffer, sizeof(s_time_buffer), "%I:%M:%S", ptmNow);
+        const char* xm_time = AmOrPm(ptmNow);
+        APP_LOG(APP_LOG_LEVEL_DEBUG, "UpdTime: %s%s", s_time_buffer, xm_time);
+        strcat(s_time_buffer, xm_time);
+        text_layer_set_text(s_upd_time_layer, s_time_buffer);
+      }
       else if (key == 1)  {
         int vibes = Text2Ord(tuple->value->cstring);
         APP_LOG(APP_LOG_LEVEL_DEBUG, "vibes: %i", vibes);
@@ -113,36 +187,48 @@ static void in_dropped_handler(AppMessageResult reason, void *context) {
 // Called when phone-app does not acknowledge receipt of a message
 static void out_failed_handler(DictionaryIterator *failed, AppMessageResult reason, void *context) {
 	APP_LOG(APP_LOG_LEVEL_DEBUG, "failed: %s", translate_error(reason));
+  text_layer_set_text(s_status_layer, "Error, check MyTrail Phone App is running.");
 }
-
 
 
 static void main_window_load(Window *window) {
   // Todo: Create and add child windows (text layers).
+  
+  // Get the root layer
+  Layer *window_layer = window_get_root_layer(window);
+  // Get the bounds of the window for sizing the text layer
+  GRect bounds = layer_get_bounds(window_layer);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "bounds: x:%i, y:%i, w:%i, h:%i", 
+          bounds.origin.x, bounds.origin.y, bounds.size.w, bounds.size.h);
+
   // Create status msg TextLayer
-  ////20150716 s_status_layer = text_layer_create(GRect(0, 20, 144, 150));
-  s_status_layer = text_layer_create(GRect(0, 40, 144, 150));
+  const int nRowH = 30;
+  s_status_layer = text_layer_create(GRect(0, nRowH, bounds.size.w, bounds.size.h-2*nRowH));
    
   text_layer_set_background_color(s_status_layer, GColorClear);
   text_layer_set_text_color(s_status_layer, GColorBlack);
-  ////20150716 text_layer_set_text(s_status_layer, "00:00");
   text_layer_set_text(s_status_layer, "MyMsg");
   
   // Improve the layout to use larger, bolder font.
   text_layer_set_font(s_status_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
-  ////20150715WayBig text_layer_set_font(s_status_layer, fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD));
-  ////20150715TadBig text_layer_set_font(s_status_layer, fonts_get_system_font(FONT_KEY_BITHAM_30_BLACK));
   text_layer_set_text_alignment(s_status_layer, GTextAlignmentCenter);
   
   // Add it as a child layer to the Window's root layer
-  layer_add_child(window_get_root_layer(window), text_layer_get_layer(s_status_layer));
+  layer_add_child(window_layer, text_layer_get_layer(s_status_layer));
 
   // Create time of day TextLayer
-  s_time_layer = text_layer_create(GRect(0, 0, 144, 40));
+  s_time_layer = text_layer_create(GRect(0, 0, bounds.size.w, nRowH));
   text_layer_set_text(s_time_layer, "00:00");
   text_layer_set_font(s_time_layer, fonts_get_system_font(FONT_KEY_BITHAM_30_BLACK));
   text_layer_set_text_alignment(s_time_layer, GTextAlignmentCenter);
-  layer_add_child(window_get_root_layer(window), text_layer_get_layer(s_time_layer));
+  layer_add_child(window_layer, text_layer_get_layer(s_time_layer));
+  
+  // Create update time TextLayer
+  s_upd_time_layer = text_layer_create(GRect(0, bounds.size.h-nRowH, bounds.size.w, nRowH));
+  text_layer_set_text(s_upd_time_layer, "upd 00:00:00x");
+  text_layer_set_font(s_upd_time_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+  text_layer_set_text_alignment(s_upd_time_layer, GTextAlignmentCenter);
+  layer_add_child(window_layer, text_layer_get_layer(s_upd_time_layer));
 }
 
 static void main_window_unload(Window *window) {
@@ -164,6 +250,8 @@ static void init() {
   
   // Subcribe to tick minute handler to show time of day.
   tick_timer_service_subscribe(MINUTE_UNIT, tick_handler_minute);
+  
+   window_set_click_config_provider(s_main_window, (ClickConfigProvider) config_provider);
   
   // Show the Window on the watch, with animated=true
   window_stack_push(s_main_window, true);
