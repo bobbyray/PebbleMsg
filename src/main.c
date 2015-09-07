@@ -2,11 +2,22 @@
 #include "license.h"
 // Template for starting a new Pebble C Project
 #include <pebble.h>
-static const char* pVersion = "v1.1.004 07/24/2015";  
+static const char* pVersion = "v1.1.007 09/07/2015";  
 static Window *s_main_window;
 static TextLayer *s_status_layer; // Text msgs on watch face.
 static TextLayer *s_time_layer; // Current time on watch face.
-static TextLayer *s_upd_time_layer; // Update time on watch face.
+
+// This is a scroll layer
+static ScrollLayer *s_scroll_layer; 
+static int s_wBounds; 
+
+// Prepare text set in s_status_layer for scrolling.
+static void trim_and_scroll_status() {
+  GSize max_size = text_layer_get_content_size(s_status_layer);
+  text_layer_set_size(s_status_layer, max_size);
+  scroll_layer_set_content_size(s_scroll_layer, GSize(s_wBounds, max_size.h + 4));
+}
+
 
 // Returns am or pm of a tick_time.
 static const char* AmOrPm(struct tm* tick_time) {
@@ -58,7 +69,7 @@ void send_click(uint8_t nButtonId, uint8_t nClickType){
 }
 
 // Up button single click.
-void up_single_click_handler(ClickRecognizerRef recognizer, void* context) {
+void show_version_click_handler(ClickRecognizerRef recognizer, void* context) {
   text_layer_set_text(s_status_layer, pVersion);
   // send_text("Text msg from Pebble."); // send_text() just to test, not needed.
 }
@@ -71,15 +82,27 @@ void select_single_click_handler(ClickRecognizerRef recognizer, void *context) {
   APP_LOG(APP_LOG_LEVEL_DEBUG, "Select button clicked");
   
   text_layer_set_text(s_status_layer, "Getting geolocation...");
+  GPoint offsetZero = {0,0};
+  scroll_layer_set_content_offset(s_scroll_layer, offsetZero, false);
+  
   send_click(BUTTON_ID_SELECT, 1); 
 }
 
+// Configure button clicks after configuration for scrolling of UP and DOWN button has been done.
+// Note: Do not configure here the UP and DOWN button single clicks because they are used for scrolling.
+void config_scroll_click_extension(void *context) {
+  window_single_click_subscribe(BUTTON_ID_SELECT, select_single_click_handler);
+  // long click config:
+  window_long_click_subscribe(BUTTON_ID_SELECT, 700, show_version_click_handler, NULL);
+}
 
+
+/* // No longer used. Configure for scrolling layer used instead.
 // Configuration for button clicks.
 // See Pebble C documentation: User Interface, Clicks.
 void config_provider(Window *window) {
   window_single_click_subscribe(BUTTON_ID_SELECT, select_single_click_handler);
-  window_single_click_subscribe(BUTTON_ID_UP, up_single_click_handler);
+  // window_single_click_subscribe(BUTTON_ID_UP, up_single_click_handler);
   
 
   // Other config examples not used now.
@@ -92,7 +115,7 @@ void config_provider(Window *window) {
   // long click config:
   // window_long_click_subscribe(BUTTON_ID_SELECT, 700, select_long_click_handler, select_long_click_release_handler);
 }
-
+*/
 
 
 
@@ -156,7 +179,11 @@ static void in_received_handler(DictionaryIterator *received, void *context) {
 			APP_LOG(APP_LOG_LEVEL_DEBUG, "received text: %s", tuple->value->cstring);
       APP_LOG(APP_LOG_LEVEL_DEBUG, "received key, %u", (unsigned int)tuple->key);
       if (key == 0) {
+        // Set scrolling offset to zero.
+        GPoint offsetZero = {0,0};
+        scroll_layer_set_content_offset(s_scroll_layer, offsetZero, false);
 			  text_layer_set_text(s_status_layer, tuple->value->cstring);
+        /* // Update time no longer used.
         // Set update time.
         time_t now = time(NULL);
         struct tm* ptmNow = localtime(&now);
@@ -165,7 +192,8 @@ static void in_received_handler(DictionaryIterator *received, void *context) {
         const char* xm_time = AmOrPm(ptmNow);
         APP_LOG(APP_LOG_LEVEL_DEBUG, "UpdTime: %s%s", s_time_buffer, xm_time);
         strcat(s_time_buffer, xm_time);
-        text_layer_set_text(s_upd_time_layer, s_time_buffer);
+        */
+        trim_and_scroll_status();  
       }
       else if (key == 1)  {
         int vibes = Text2Ord(tuple->value->cstring);
@@ -191,44 +219,55 @@ static void out_failed_handler(DictionaryIterator *failed, AppMessageResult reas
 }
 
 
+
 static void main_window_load(Window *window) {
   // Todo: Create and add child windows (text layers).
   
   // Get the root layer
   Layer *window_layer = window_get_root_layer(window);
   // Get the bounds of the window for sizing the text layer
-  GRect bounds = layer_get_bounds(window_layer);
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "bounds: x:%i, y:%i, w:%i, h:%i", 
+  GRect bounds = layer_get_frame(window_layer);  
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "get frame bounds: x:%i, y:%i, w:%i, h:%i",  
           bounds.origin.x, bounds.origin.y, bounds.size.w, bounds.size.h);
-
-  // Create status msg TextLayer
+  GRect max_text_bounds = GRect(0, 0, bounds.size.w, 2000); 
+  
+  // Initialize the scroll layer  
   const int nRowH = 30;
-  s_status_layer = text_layer_create(GRect(0, nRowH, bounds.size.w, bounds.size.h-2*nRowH));
-   
+  s_scroll_layer = scroll_layer_create(GRect(0, nRowH, bounds.size.w, bounds.size.h-nRowH-2)); 
+
+  // This binds the scroll layer to the window so that up and down map to scrolling
+  // You may use scroll_layer_set_callbacks to add or override interactivity
+  scroll_layer_set_click_config_onto_window(s_scroll_layer, window);
+  
+  // void scroll_layer_set_callbacks(ScrollLayer * scroll_layer, ScrollLayerCallbacks callbacks)
+  // Set click handlers in addition to the default scrolling single click for UP and DOWN.
+  struct ScrollLayerCallbacks callbacks;
+  callbacks.click_config_provider = config_scroll_click_extension;
+  callbacks.content_offset_changed_handler = NULL;
+  scroll_layer_set_callbacks(s_scroll_layer, callbacks);
+  
+  
+  // Create status msg TextLayer
+  s_status_layer = text_layer_create(max_text_bounds);  
   text_layer_set_background_color(s_status_layer, GColorClear);
   text_layer_set_text_color(s_status_layer, GColorBlack);
   text_layer_set_text(s_status_layer, "MyMsg");
+  // Note: Do not call trim_and_scroll_status(). Not sure why, but does not show MyMsg properly.
   
   // Improve the layout to use larger, bolder font.
   text_layer_set_font(s_status_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
   text_layer_set_text_alignment(s_status_layer, GTextAlignmentCenter);
   
-  // Add it as a child layer to the Window's root layer
-  layer_add_child(window_layer, text_layer_get_layer(s_status_layer));
-
+  // Add the layers for display
+  scroll_layer_add_child(s_scroll_layer, text_layer_get_layer(s_status_layer));
+  layer_add_child(window_layer, scroll_layer_get_layer(s_scroll_layer));
+    
   // Create time of day TextLayer
   s_time_layer = text_layer_create(GRect(0, 0, bounds.size.w, nRowH));
   text_layer_set_text(s_time_layer, "00:00");
   text_layer_set_font(s_time_layer, fonts_get_system_font(FONT_KEY_BITHAM_30_BLACK));
   text_layer_set_text_alignment(s_time_layer, GTextAlignmentCenter);
   layer_add_child(window_layer, text_layer_get_layer(s_time_layer));
-  
-  // Create update time TextLayer
-  s_upd_time_layer = text_layer_create(GRect(0, bounds.size.h-nRowH, bounds.size.w, nRowH));
-  text_layer_set_text(s_upd_time_layer, "upd 00:00:00x");
-  text_layer_set_font(s_upd_time_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
-  text_layer_set_text_alignment(s_upd_time_layer, GTextAlignmentCenter);
-  layer_add_child(window_layer, text_layer_get_layer(s_upd_time_layer));
 }
 
 static void main_window_unload(Window *window) {
@@ -236,6 +275,8 @@ static void main_window_unload(Window *window) {
   // Destroy status msg TextLayer
   text_layer_destroy(s_status_layer);
   text_layer_destroy(s_time_layer);
+  
+  scroll_layer_destroy(s_scroll_layer); 
 }
 
 static void init() {
@@ -250,8 +291,6 @@ static void init() {
   
   // Subcribe to tick minute handler to show time of day.
   tick_timer_service_subscribe(MINUTE_UNIT, tick_handler_minute);
-  
-   window_set_click_config_provider(s_main_window, (ClickConfigProvider) config_provider);
   
   // Show the Window on the watch, with animated=true
   window_stack_push(s_main_window, true);
