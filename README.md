@@ -10,5 +10,7 @@ The time of day in minutes is shown at top of the watch face and is updated ever
 The text received follows below the time of day.
 
 Buttons on Pebble:
+* Up single click scrolls text up.
+* Down single click scrolls text down.
 * Select single click: Gets geo-location.
-* Up single click: Shows Pebble app varsion.
+* Select long click: Shows Pebble app varsion.
