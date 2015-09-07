@@ -70,7 +70,12 @@ void send_click(uint8_t nButtonId, uint8_t nClickType){
 
 // Up button single click.
 void show_version_click_handler(ClickRecognizerRef recognizer, void* context) {
+  // Set scrolling offset to zero.
+  GPoint offsetZero = {0,0};
+  scroll_layer_set_content_offset(s_scroll_layer, offsetZero, false);
   text_layer_set_text(s_status_layer, pVersion);
+  trim_and_scroll_status();  
+  
   // send_text("Text msg from Pebble."); // send_text() just to test, not needed.
 }
 
