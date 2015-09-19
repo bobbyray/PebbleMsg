@@ -2,7 +2,7 @@
 #include "license.h"
 // Template for starting a new Pebble C Project
 #include <pebble.h>
-static const char* pVersion = "v1.1.009a 09/19/2015";  
+static const char* pVersion = "v1.1.009 09/19/2015";  
 static Window *s_main_window;
 static TextLayer *s_status_layer; // Text msgs on watch face.
 static TextLayer *s_time_layer; // Current time on watch face.
