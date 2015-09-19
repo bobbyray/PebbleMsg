@@ -2,14 +2,17 @@
 #include "license.h"
 // Template for starting a new Pebble C Project
 #include <pebble.h>
-static const char* pVersion = "v1.1.007 09/07/2015";  
+static const char* pVersion = "v1.1.009 09/18/2015";  
 static Window *s_main_window;
 static TextLayer *s_status_layer; // Text msgs on watch face.
 static TextLayer *s_time_layer; // Current time on watch face.
 
+static AppTimer* s_timer  = NULL;
+
 // This is a scroll layer
 static ScrollLayer *s_scroll_layer; 
 static int s_wBounds; 
+
 
 // Prepare text set in s_status_layer for scrolling.
 static void trim_and_scroll_status() {
@@ -17,6 +20,34 @@ static void trim_and_scroll_status() {
   text_layer_set_size(s_status_layer, max_size);
   scroll_layer_set_content_size(s_scroll_layer, GSize(s_wBounds, max_size.h + 4));
 }
+
+static void ShowText(const char* text) {
+        // Set scrolling offset to zero.
+        GPoint offsetZero = {0,0};
+        scroll_layer_set_content_offset(s_scroll_layer, offsetZero, false);
+        // Set text to display.
+			  text_layer_set_text(s_status_layer, text);
+        trim_and_scroll_status();
+  
+}
+
+// Issues number of vibrations given by s_vibes variable.
+static void DoVibes(int vibes) {
+  for (int i=0; i < vibes; i++ ) {
+    vibes_long_pulse();
+    psleep(1000);
+  }
+}
+
+// Handler for timer expiration.
+static void TimeOutHandler(void* data) {
+  const char * timeoutMsg = "Tracking timeout. Check phone app is running.";
+  ShowText(timeoutMsg);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "%s", timeoutMsg);
+  int vibes = 2;
+  DoVibes(vibes);
+}
+
 
 
 // Returns am or pm of a tick_time.
@@ -178,15 +209,17 @@ static void in_received_handler(DictionaryIterator *received, void *context) {
 	Tuple *tuple;
 
 	int key; // Key.
-	for ( key = 0; key < 2; key++ ) {
+	for ( key = 0; key < 3; key++ ) {
 		tuple = dict_find(received, key);
-		if(tuple) {
+		if(tuple) 
+    {
 			APP_LOG(APP_LOG_LEVEL_DEBUG, "received text: %s", tuple->value->cstring);
       APP_LOG(APP_LOG_LEVEL_DEBUG, "received key, %u", (unsigned int)tuple->key);
       if (key == 0) {
         // Set scrolling offset to zero.
         GPoint offsetZero = {0,0};
         scroll_layer_set_content_offset(s_scroll_layer, offsetZero, false);
+        // Set text to display.
 			  text_layer_set_text(s_status_layer, tuple->value->cstring);
         /* // Update time no longer used.
         // Set update time.
@@ -202,13 +235,33 @@ static void in_received_handler(DictionaryIterator *received, void *context) {
       }
       else if (key == 1)  {
         int vibes = Text2Ord(tuple->value->cstring);
+        DoVibes(vibes);
         APP_LOG(APP_LOG_LEVEL_DEBUG, "vibes: %i", vibes);
-        for (int i=0; i < vibes; i++ ) {
-          vibes_long_pulse();
-          psleep(1000);
+      }
+      else if (key == 2) {
+        // Set time out for receiving for next message.
+        int nSecs = Text2Ord(tuple->value->cstring);
+        APP_LOG(APP_LOG_LEVEL_DEBUG, "TimeOut, %u", (unsigned int)nSecs);
+        if (nSecs > 0) {
+          // Set timeout in milliseconds.
+          uint msecs = nSecs * 1000;
+          if (s_timer == NULL) {
+            s_timer = app_timer_register(msecs, TimeOutHandler, NULL);
+            APP_LOG(APP_LOG_LEVEL_DEBUG, "Timer started.");
+          } else {
+            app_timer_reschedule(s_timer, msecs);
+            APP_LOG(APP_LOG_LEVEL_DEBUG, "Timer restarted.");
+          }
+        } else {
+          // No timeout. Stop the timer.
+          if (s_timer != NULL) {
+            app_timer_cancel(s_timer);  
+            s_timer = NULL;
+            APP_LOG(APP_LOG_LEVEL_DEBUG, "Timer cancelled.");
+          }
         }
       }
-		}
+	  }  
 	}
 }
 
@@ -260,8 +313,8 @@ static void main_window_load(Window *window) {
   // Note: Do not call trim_and_scroll_status(). Not sure why, but does not show MyMsg properly.
   
   // Improve the layout to use larger, bolder font.
-  text_layer_set_font(s_status_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
-  text_layer_set_text_alignment(s_status_layer, GTextAlignmentCenter);
+  text_layer_set_font(s_status_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD)); ////FONT_KEY_GOTHIC_24_BOLD FONT_KEY_GOTHIC_24
+  text_layer_set_text_alignment(s_status_layer, GTextAlignmentLeft);
   
   // Add the layers for display
   scroll_layer_add_child(s_scroll_layer, text_layer_get_layer(s_status_layer));
