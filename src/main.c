@@ -2,7 +2,7 @@
 #include "license.h"
 // Template for starting a new Pebble C Project
 #include <pebble.h>
-static const char* pVersion = "v1.1.009 09/18/2015";  
+static const char* pVersion = "v1.1.009a 09/19/2015";  
 static Window *s_main_window;
 static TextLayer *s_status_layer; // Text msgs on watch face.
 static TextLayer *s_time_layer; // Current time on watch face.
@@ -273,7 +273,7 @@ static void in_dropped_handler(AppMessageResult reason, void *context) {
 // Called when phone-app does not acknowledge receipt of a message
 static void out_failed_handler(DictionaryIterator *failed, AppMessageResult reason, void *context) {
 	APP_LOG(APP_LOG_LEVEL_DEBUG, "failed: %s", translate_error(reason));
-  text_layer_set_text(s_status_layer, "Error, check MyTrail Phone App is running.");
+  ShowText("Error, check MyTrail Phone App is running.");
 }
 
 
