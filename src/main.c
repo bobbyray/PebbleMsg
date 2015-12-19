@@ -273,7 +273,7 @@ static void in_dropped_handler(AppMessageResult reason, void *context) {
 // Called when phone-app does not acknowledge receipt of a message
 static void out_failed_handler(DictionaryIterator *failed, AppMessageResult reason, void *context) {
 	APP_LOG(APP_LOG_LEVEL_DEBUG, "failed: %s", translate_error(reason));
-  ShowText("Error, check MyTrail Phone App is running.");
+  ShowText("Error, check GeoTrail Phone App is running.");
 }
 
 
@@ -309,8 +309,8 @@ static void main_window_load(Window *window) {
   s_status_layer = text_layer_create(max_text_bounds);  
   text_layer_set_background_color(s_status_layer, GColorClear);
   text_layer_set_text_color(s_status_layer, GColorBlack);
-  text_layer_set_text(s_status_layer, "MyMsg");
-  // Note: Do not call trim_and_scroll_status(). Not sure why, but does not show MyMsg properly.
+  text_layer_set_text(s_status_layer, "GeoTrail");
+  // Note: Do not call trim_and_scroll_status(). Not sure why, but does not show GeoTrail properly.
   
   // Improve the layout to use larger, bolder font.
   text_layer_set_font(s_status_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD)); ////FONT_KEY_GOTHIC_24_BOLD FONT_KEY_GOTHIC_24

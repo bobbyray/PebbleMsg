@@ -3,14 +3,14 @@
     "capabilities": [
         ""
     ],
-    "companyName": "bobschomburg@gmail.com",
-    "longName": "PebbleMsg",
+    "companyName": "Wigo",
+    "longName": "GeoTrail",
     "projectType": "native",
     "resources": {
         "media": []
     },
     "sdkVersion": "2",
-    "shortName": "PebbleMsg",
+    "shortName": "GeoTrail",
     "uuid": "1ccd506b-4ea6-4db0-a1b4-9dabf488c0ef",
     "versionCode": 1,
     "versionLabel": "1.0",
